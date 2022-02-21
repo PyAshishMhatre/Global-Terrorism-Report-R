@@ -1,0 +1,1316 @@
+---
+title: "Hackathon Group 2"
+author: "Ashish Mhatre, Harshad Jadhav, Balaji Sampath"
+date: "19/02/2022"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r lib, include=FALSE, warning=FALSE}
+#Import Dependencies and set working directory 
+
+setwd('C:/Users/Ashish Mhatre/Desktop/CVA/Project_Group 2/IE6600_Sec03_Group02_Hackathon')
+
+library(tidyr)
+library(dplyr)
+library(lubridate)
+library(stringr)
+library(imputeTS)
+library(ggplot2)
+library(magrittr)
+library(stringr)
+library(extrafont)
+library(gridExtra)
+library(corrplot)
+library(lubridate)
+library(ggalluvial)
+library(gganimate)
+library(ggplot2)
+library(dplyr)
+library(gapminder)
+library(ggthemes)
+library(gifski)
+library(networkD3)
+library(alluvial)
+library(ggalluvial)
+library(ggridges)
+library(viridis)
+library(hrbrthemes) 
+library(wordcloud2)
+library(ggwordcloud)
+library(tidyr)
+library(dplyr)
+library(lubridate)
+library(stringr)
+library(forcats)
+library(ggplot2)
+library(ggrepel)
+library(readxl)
+library(tweenr)
+library(ggthemes)
+library(countrycode)
+library(devtools)
+library(plotly)
+library(corrplot)
+library(RColorBrewer)
+library(treemapify)
+library(wordcloud)
+library(wordcloud2)
+library(tm)
+library(fmsb)
+library(igraph)
+
+
+
+
+```
+
+```{r cleaning, include=FALSE, warning=FALSE}
+Uncleaned_terror_df <- read.csv("globalterrorismdb_0718dist.csv")
+
+Uncleaned_terror_df <- Uncleaned_terror_df[-c(5,7,17,18,19,31:34,38,40,43,44:58,60:64, 67, 68, 75:81, 86:97, 108, 109, 113:130, 133, 135)]
+
+NA_count <- Uncleaned_terror_df %>% summarise(across(everything(), ~ sum(is.na(.))))
+
+Uncleaned_terror_df <- Uncleaned_terror_df %>% replace_na(list(provstate = "Unknown", 
+                                     city = "Unknown", 
+                                     latitude = 0, 
+                                     longitude = 0,
+                                     specificity = 0, 
+                                     doubtterr = -9 ,
+                                     alternative = 6 , 
+                                     alternative_txt= 'Unknown Category' ,
+                                     targsubtype1= -99 ,
+                                     corp1= 'Unkown' , 
+                                     natlty1= -99 ,
+                                     natlty1_txt= "Unkown" ,
+                                     motive= 'Unkown' ,
+                                     claimed= -9 , 
+                                     claimmode= 'Not Claimed' , 
+                                     claimmode_txt='Not Claimed' , 
+                                     weapsubtype1= -99, 
+                                     weapdetail= 'Unkown detail' , 
+                                     propextent= -99 , 
+                                     propextent_txt = 'Unkown',
+                                     ishostkid = 1,
+                                     nhostkid = -99,
+                                     nhostkidus = 0
+                                     ))
+
+calc_mode <- function(x){
+  
+  # List the distinct / unique values
+  distinct_values <- unique(x)
+  
+  # Count the occurrence of each distinct value
+  distinct_tabulate <- tabulate(match(x, distinct_values))
+  
+  # Return the value with the highest occurrence
+  distinct_values[which.max(distinct_tabulate)]
+}
+
+
+Uncleaned_terror_df <- Uncleaned_terror_df %>%
+  mutate(across(c(multiple, guncertain1,
+                  nperps,nperpcap,nkill,nkillus,nkillter,nwound,nwoundus,nwoundte
+                  ),~replace_na(.x, calc_mode(.x))))
+
+NA_count_cleaned <- Uncleaned_terror_df %>% summarise(across(everything(), ~ sum(is.na(.))))
+
+write.csv(Uncleaned_terror_df, 'Cleaned_Terror_DF.csv') #Uncomment for running first time
+
+
+
+```
+
+
+```{r data, include=FALSE,warning=FALSE}
+# Import Global Terrorism Dataset
+
+gtd_df <- read.csv('Cleaned_Terror_DF.csv')
+
+gtd_df <- gtd_df[-1]
+
+
+```
+
+# Introduction 
+
+#### The Global Terrorist database contains a detailed information about the terrorism, from 1970 to 2017. There are 181691 records and 135 columns including date, country, target details, attack type, and also if there was a motive behind a attack, the outcome of attack, and weapon details. The database is maintained by researchers at the National Consortium for the Study of Terrorism and Responses to Terrorism (START), headquartered at the University of Maryland. 
+#### For Hackathon we have dropped columns having more than 80% NULL data and would be using the remainder of 60 attributes to present our analysis. we here by state that we have used this data materials solely for non-commercial analysis and Visualization purpose.
+
+# Problem Statement 
+
+#### The objective of the report is to understand the terrorist events around the world. By making use of interactive charts and animations we have tried to make the exploration easy and more informative. 
+#### The report is divided into 4 sections, First section we try to have a Birdseye view on global events and observe the trend of attacks across the globe. In section two we concentrate our attention to terror activities related to India, similarly in section three we focus on United States and try to discover trends and relations regarding attacks. This section concludes with a brief comparison of terrorism and gun violence. Lastly in section four we make use of happiness index data, Global GDP data and Income by country data to perform a cross tab analysis and find correlation between the various factors and indicators of a country with terror attacks. Links to all external data sets are mentioned in references section.
+
+
+# Section 1
+
+## 1.1 What was the overall trend in the number of terrorist attacks worldwide ?
+
+```{r section1.1, echo=FALSE, warning=FALSE, fig.height = 8, fig.width = 10}
+
+attacks <- gtd_df %>%
+dplyr::select(eventid, iyear,country_txt) %>%
+group_by(iyear, country_txt) %>%
+summarise(Total_Attacks = n(), .groups = 'drop_last')
+worldmap <- plot_geo(attacks,
+locationmode = "country names",
+frame = ~iyear) %>%
+add_trace(locations = ~country_txt,
+z = ~Total_Attacks,
+zmin = 0,
+zmax = max(attacks$Total_Attacks),
+color = ~Total_Attacks,
+colors = "OrRd") %>%
+layout(title = list(text = "<b> Number of attacks on Countries over 50 Decades </b>", y = 0.98), paper_bgcolor='#fdbb84',
+plot_bgcolor='#fdbb84') %>%
+config(displayModeBar = FALSE)
+worldmap
+
+
+
+
+
+```
+## Conclusion
+
+In 1970 the countries in the Northern, Central and Southern America were affected the most and few countries in the middle east witnessed terrorist activities. During this year United States of America was the worst affected nation. Around 1976 1977 and 1978, terrorists activities were seen in countries belonging to European, Asian and Sub Sahara African regions and also in the Soviet Union and this can be considered as the time when terrorism started spreading in the world. Through 1984, most number of terrorist events occurred in Peru and Chile and continued to do so until 1988 where India also was affected along with them. In 1992, it can be observed that almost every country in the world had faced terrorism. The year 1998 saw decrease in the terrorist events but that didn't last for long as from the year 2005 there was constant increase in the number of attacks all over the world and 2014 was the year which has recorded most number of terrorist attacks. In 2014, countries like Iraq and Pakistan suffered the most with 3933 and 2151 attacks respectively.
+
+## 1.2 How number of terrorist activities have varied across a period of 50 years ?
+
+```{r section 1.2, echo=FALSE, warning=FALSE, fig.height = 8, fig.width = 15}
+
+countries <- gtd_df %>%
+dplyr::select(1,7) %>%
+group_by(country_txt ) %>%
+summarise(count = n()) %>%
+arrange(desc(count)) %>%
+slice(1:20) %>%
+pull(country_txt)
+
+
+
+countries_attack <- gtd_df %>%
+dplyr::select(1,7,25) %>%
+filter(country_txt %in% countries) %>%
+group_by(country_txt,attacktype1_txt) %>%
+summarise(count = n(), .groups = 'drop_last')
+
+
+
+
+top_twenty <- ggplot(countries_attack, aes(x= reorder(country_txt, count), y= count, fill = attacktype1_txt))
+
+
+
+top_twenty + geom_bar(stat = "identity") +
+guides(fill = guide_legend(reverse = T)) +
+coord_flip() +
+labs(fill = "Attack Type",
+title = "Top 20 countries attacked",
+y = "Number of attacks",
+x= "Countries") +
+
+scale_fill_brewer(palette = 'OrRd')+
+  theme_wsj()+
+theme(plot.title = element_text(size = 14,
+face = "bold",
+colour = "black",
+lineheight = 1.2,
+hjust = 0.5),
+axis.title.x = element_text(size = 14),
+axis.title.y = element_text(size = 14),
+axis.text.x = element_text(size = 10),
+axis.text.y = element_text(size = 10))
+
+
+
+
+
+```
+
+## Conclusion
+
+The stacked barplot represents twenty countries that are most affected by terrorism. Iraq continues to be the country most impacted by terrorism. ISIL is responsible for all the terrorists attacks in Iraq Most of the attacks include bombing and explosion. After the withdrawal of US troops from Iraq, civil war broke, which led to the formation of ISIL and increased attacks on Iraq.
+
+## 1.3 Which are the top twenty countries that were targeted by the terrorist groups ?
+
+```{r section 1.3, echo=FALSE, warning=FALSE, fig.height = 10, fig.width = 15}
+
+events_per_year <- gtd_df %>%
+select(eventid,iyear) %>%
+group_by(iyear) %>%
+summarise(count = n(), .groups = 'drop_last')
+
+
+events <- ggplot( events_per_year, aes(x = iyear, y = count))+
+  geom_line() + 
+  geom_point() + 
+  geom_label_repel(aes(label = count),size = 3,alpha = 0.9) +
+  scale_x_continuous(limits = c(1970,2017), breaks = 1970:2017)+
+  theme_wsj()+
+  labs(title = "Trend in terrorism from 1970 to 2017",y = "Number of events",x= "Years") +
+  theme(plot.title = element_text(size = 14,face = "bold",colour = "black",lineheight = 1.2,hjust =
+                                    0.5),axis.title.x = element_text(size = 12),
+        axis.title.y = element_text(size = 12),
+        axis.text.x = element_text(size = 10, angle = 45),
+        axis.text.y = element_text(size = 10),
+        )
+
+plot(events)
+
+
+
+
+
+
+```
+
+## Conclusion
+
+The above linegraph represents the number of attacks all over the world from 1970 to 2017. As can be observed from the graph that on an average terrorism around the world has always increased until 2014. There were few years like from 1997 to 1998 where there was a sharp decrease in terrorists activities. The world in 2014 witnessed most terrorist attacks, this is due to the allegiance of two terrorist groups Boko Haram and ISIL, They were were jointly responsible for 51% of all claimed global fatalities in 2014. 78% of all deaths and 57% of all attacks occurred in just five countries: Afghanistan, Iraq, Nigeria, Pakistan and Syria.
+
+
+# Section 2
+
+## 2.1 Which were the cities that were mostly affected by various types of terrorist attacks?
+
+```{r section 2.1, echo=FALSE, warning=FALSE, fig.height = 10, fig.width = 15}
+
+
+A <- gtd_df%>%
+  filter(country==92)
+
+A_1 <- A[c('city','attacktype1', 'attacktype1_txt')]
+
+A_2 <- A_1%>%
+  group_by(attacktype1_txt,city)%>%
+  summarise(Total_attacks = sum(attacktype1),.groups = 'drop_last')%>%
+  arrange(desc(Total_attacks)) %>% 
+  filter(city != "Unknown", attacktype1_txt != "Unknown")%>%
+  slice(1:15)
+
+ggplot(A_2, aes(area = Total_attacks, fill = attacktype1_txt ,
+               label = city, subgroup = attacktype1_txt, )) +labs(fill = "AttackType")+labs(title ="Attack Type Distribution By Cities")+
+  theme_wsj()+
+  geom_treemap() +
+  geom_treemap_subgroup_border(colour = "white", size = 5) +
+  geom_treemap_subgroup_text(place = "centre", grow = TRUE,
+                             alpha = 0.8, colour = "grey",
+                             fontface = "italic") +
+  geom_treemap_text(colour = "black", place = "centre",
+                    size = 4, grow =TRUE)+scale_fill_brewer(palette="OrRd")
+
+
+
+
+
+```
+
+## Conclusion
+
+The treemap gives us the information about distribution of the various attack types across the Indian cities. Compared to other cities, the city of Srinagar was attacked by almost all the methods and it can be inferred from the chart that it was bombed many number of times. Imphal is the second most attacked city.
+
+
+## 2.2 Do terrorists groups plan their attacks based on regions ?
+
+```{r section 2.2, echo=FALSE, warning=FALSE, fig.height = 8, fig.width = 10}
+
+
+
+terror.india <- gtd_df %>% filter(country_txt == "India")
+  terror.india$provstate[terror.india$provstate == "Orissa"] <-
+  "Odisha"
+  terror.india$provstate[terror.india$provstate == "Andhra pradesh"]<-"Andhra Pradesh"
+  
+terror.ind.recent <-
+  terror.india %>% filter(iyear >= "2000") %>% select(
+    one_of(
+      "iyear",
+      "imonth",
+      "iday",
+      "region_txt",
+      "provstate",
+      "city",
+      "latitude",
+      "longitude",
+      "attacktype1_txt",
+      "success",
+      "targtype1_txt",
+      "gname"
+      
+    )
+  ) %>%mutate(region = ifelse(
+    provstate %in% c("Rajasthan", "Maharashtra", "Gujarat", "Goa", "Daman and Diu"),
+    "Western",
+    ifelse(
+      provstate %in% c(
+        "Karnataka",
+        "Andhra Pradesh",
+        "Tamil Nadu",
+        "Telangana",
+        "Kerala",
+        "Puducherry"
+      ),
+      "Southern",
+      ifelse(
+        provstate %in% c(
+          "Uttar Pradesh",
+          "Jammu and Kashmir",
+          "Himachal Pradesh",
+          "Uttarakhand",
+          "Punjab",
+          "Haryana",
+          "Delhi",
+          "Chandigarh",
+          "Uttaranchal"
+        ),
+        "Northern",
+        ifelse(
+          provstate %in% c(
+            "Arunachal Pradesh",
+            "Assam",
+            "Meghalaya",
+            "Sikkim",
+            "Odisha",
+            "Bihar",
+            "West Bengal",
+            "Jharkhand",
+            "Manipur",
+            "Mizoram",
+            "Nagaland",
+            "Tripura"
+          ),
+          "Eastern",
+          ifelse(
+            provstate %in% c("Madhya Pradesh", "Chhattisgarh"),
+            "Central",
+            NA
+          )
+        )
+      )
+    )
+  ))%>%mutate(terror.abbr = ifelse(
+  gname == "People's War Group (PWG)",
+  "PWG",
+  ifelse(
+  gname == "Vishwa Hindu Parishad (VHP)",
+  "VHP",
+  ifelse(
+  gname == "Maoist Communist Center (MCC)",
+  
+  "MCC",
+  ifelse(
+  gname == "Communist Party of India - Maoist (CPI-Maoist)",
+  "CPI-Maoist",
+  ifelse(
+  gname == "Naxalites",
+  "Naxalites",
+  ifelse(
+  gname == "Maoists",
+  "Maoists",
+  ifelse(
+  gname == "People's Liberation Army (India)",
+  "PLA",
+  ifelse(gname == "Jharkhand Janmukti Parishad (JJP)", "JJP", ifelse(gname=="Lashkar-e-Taiba (LeT)","LeT",ifelse(gname=="United Liberation Front of Assam (ULFA)","ULFA",ifelse(gname=="National Democratic Front of Bodoland (NDFB)","NBFB",ifelse(gname=="Garo National Liberation Army","GNLA",gname))))
+  )
+  )
+  )
+  )
+  )
+  ))))%>%na.omit()
+
+network_df <- terror.ind.recent %>% 
+  select(region, terror.abbr) %>% 
+  filter( terror.abbr != 'Unknown') %>% 
+  group_by(region, terror.abbr) %>% 
+  summarise(count = n(), .groups = 'drop_last') %>%
+  arrange(desc(count)) %>% 
+  slice(1:5)
+
+nodes <- data.frame(
+  name=c(as.character(network_df$region), 
+  as.character(network_df$terror.abbr)) %>% unique()
+)
+
+network <- graph.data.frame(d=network_df, directed=F) 
+cnetwork<- cluster_edge_betweenness(network)
+V(network)["Central"]$color<-"red"
+V(network)["Northern"]$color<-"purple"
+V(network)["Eastern"]$color<-"green"
+V(network)["Southern"]$color<-"yellow"
+V(network)["Western"]$color<-"brown"
+
+
+
+plot(cnetwork,network,edge.color="orange", edge.curved=.1, vertex.label.cex = 0.8)  
+
+title(main = "Terrorist Groups And Their Active Regions")
+
+
+
+
+```
+
+
+## Conclusion
+
+The network chart tells us whether the terrorists groups organise their attack based on the regions in India. Some groups attack only one region like LeT in North and ULFA in the eastern part of the country. There are also groups which attack more than one region like the PWG attacks both central and southern regions. Maoists and CPI- Maoists are the only two groups which attacks all the regions except the north.
+
+
+## 2.3 In India, what was the mostly used attack method by the terrorists organisations?
+
+```{r section 2.3, echo=FALSE, warning=FALSE, fig.height = 8, fig.width = 10}
+
+C<- gtd_df%>%
+    filter(country==92)
+ 
+ 
+C<- C[c("attacktype1","attacktype1_txt")]
+
+ C_1 <-C%>%
+   group_by(attacktype1_txt)%>%
+  summarise(Total_attacks = n())%>%
+  arrange(desc(Total_attacks))%>%
+   filter(attacktype1_txt != "Unknown")
+ 
+ C_2<- C_1%>%
+   pivot_wider(
+    names_from = attacktype1_txt,
+    values_from = Total_attacks
+  )
+ 
+ C_3 <- rbind(rep(12000,9),rep(0,9),C_2)
+ 
+ C_4<- radarchart(C_3,axistype = 1,axislabcol = "black",
+           cglty = 1, cglcol = "gray",
+           pcol = "red", plwd = 2,
+           pfcol = rgb(0,0,0, 0.25),title= "Most Preferred Attack Methods")
+
+
+
+
+```
+
+
+## Conclusion
+
+The spider chart represents the most used attack methods by the terrorist groups in India over the years. It can be observed that bombing accounts for almost 50% of the attacks. The second method that was preferred was armed assault which constitutes 25%. Hostage taking and Unarmed assault were the least preferred methods among the terrorists groups.
+
+
+## 2.4 Which are the most notorious terrorist groups active in India ?
+
+```{r section 2.4, echo=FALSE, warning=FALSE, fig.height = 8, fig.width = 10}
+
+
+ind_df <- gtd_df %>% 
+  filter(country_txt == 'India' & gname != 'Unknown' ) %>% 
+  select(group = gname, state = provstate) %>% 
+  group_by(state, group) %>% 
+  summarise(Count = n(), .groups = 'drop_last') %>%
+  arrange(desc(Count)) %>% 
+  slice(1:5)
+
+
+
+set.seed(43)
+ggplot(ind_df, aes(label = group, size = Count, color = Count)) +
+  theme_wsj()+
+  scale_color_gradient(low = "darkred", high = "red") +
+  geom_text_wordcloud_area(aes(angle = 45 * sample(-2:2, nrow(ind_df),
+                                                   replace = TRUE,
+                                                   prob = c(1, 1, 4, 1, 1)
+  )),mask = png::readPNG("C:/Users/Ashish Mhatre/Desktop/CVA/Project_Group 2/IE6600_Sec03_Group02_Hackathon/India_WordCloud.png"), rm_outside = TRUE) +
+  scale_size_area(max_size = 35)  +
+  theme_minimal() 
+
+
+```
+
+
+## Conclusion
+
+Naxalite–Maoist group name looks the most prominent as the most dangerous terrorist group in India with more than 1400 attacks followed by another Naxalite group operating in Andhra Pradesh region by People's War Group (PWG). These groups target Government in general by staging attacks against military, police and government. Other equally responsible groups for terrorism are Muslim Militants, Bodo Militants and Sikh Extremists.
+
+
+# Section 3
+
+## 3.1 How many attacks for a particular attack type happened in each year? and How many total number of each attack type affected the cities ? 
+
+```{r section 3.1, echo=FALSE, warning=FALSE, fig.height = 8, fig.width = 10}
+
+us_df <- gtd_df %>%
+  filter(., country_txt == 'United States')
+
+
+top_year <- us_df %>% 
+  select(iyear) %>%
+  group_by(iyear) %>% 
+  summarise(count = n()) %>% 
+  arrange(iyear)
+
+year <- bind_rows(top_year %>% head(10), top_year %>% tail(10))
+
+task1 <- us_df %>% 
+  select(Source = iyear, Target = attacktype1_txt) %>%
+  filter( Source %in% year$iyear & Target != 'Unknown') %>% 
+  group_by(Source,Target) %>% 
+  summarise(count = n(),.groups = 'drop_last') %>%
+  arrange(desc(count)) %>%
+  drop_na() %>%
+  slice(1:5)
+
+task2 <- us_df %>% 
+  filter( iyear %in% year$iyear & attacktype1_txt != 'Unknown') %>% 
+  select(Source = attacktype1_txt, Target = provstate) %>%
+  group_by(Source,Target) %>% 
+  summarise(count = n(), .groups = 'drop_last') %>%
+  arrange(desc(count)) %>%
+  drop_na() %>% 
+  slice(1:5)
+
+task1$Source <- as.character(task1$Source)
+
+sankey <- bind_rows(task1,task2)
+
+nodes <- data.frame(
+  name=c(as.character(sankey$Source), 
+         as.character(sankey$Target)) %>% unique())
+
+sankey$IDsource <- match(sankey$Source, nodes$name)-1 
+sankey$IDtarget <- match(sankey$Target, nodes$name)-1
+
+# Make the Network
+plot_sankey <- sankeyNetwork(Links = sankey, Nodes = nodes,
+                   Source = "IDsource", Target = "IDtarget",
+                   Value = "count", NodeID = "name", 
+                   sinksRight=FALSE)
+
+plot_sankey
+
+
+
+
+
+
+```
+
+## Conclusion
+
+Terror Attacks on United States are in decline since the highest spike in 1970s. Bombing/Explosion has been the most used attack type over the years with a high of 278 explosions in 1970 and the lowest being 2 incidents in 2008,2009 and 2012. The above Sankey plot helps us to understand the exact flow of attack incidents by year and attack type by interactively showing us the number of attacks per year for a given type while also showing us the distribution of attack types by cities, where we can see that California, New York and Puerto Rico are the 3 cities who have received a cumulative attacks of more than 100 over all the years from 1970 to 2017.
+
+
+## 3.2 How was the Distribution of Attack frequency by Target over the Years ?
+
+```{r section 3.2, echo=FALSE, warning=FALSE, fig.height = 8, fig.width = 10}
+
+ridges <- us_df %>% 
+  select(Year = iyear, Target = targtype1_txt) %>% 
+  arrange(Year) %>% 
+  drop_na()
+
+
+ggplot(ridges, aes(y=Target, x=Year,  fill=Year)) +
+  theme_wsj()+
+  scale_fill_brewer(palette = 'OrRd') +
+  geom_density_ridges(alpha=0.5, stat="binline", bins=20) +
+  theme_ridges() +
+  theme(
+    legend.position="none",
+    panel.spacing = unit(2, "lines"),
+    strip.text.x = element_text(size = 8)
+  ) + 
+  labs(title = 'Distribution of Attack frequency by Target over the Years')+
+  xlab("Years") +
+  ylab("Target Categories")
+
+
+
+
+
+
+
+```
+
+## Conclusion
+
+The majority of attacks in United States have taken place in the year 1970, which, we can see targeted everything with few target categories like Military, Police, Telecommunication, Other and NGO's being targeted the most. The years after 2000 witness a medium to high frequency of attacks with attacks targeting Religious Figures/Institution, Police and Transport. The overall level of terrorist-related acts in the United States declined in the early 1990s, when compared to figures for the 1970s and 1980s, but has increased steadily during the early 2000's years.
+
+
+## 3.3 How was the Activity of top Terrorist group over the decades ?
+
+```{r section 3.3, echo=FALSE, warning=FALSE, fig.height = 8, fig.width = 17}
+
+
+us_df_mod <- us_df %>%
+    mutate(decade = 
+             ifelse(iyear<1980, '70s', 
+                    ifelse(iyear < 1990, '80s', 
+                           ifelse(iyear < 2000, '90s', 
+                                  ifelse( iyear < 2010, '2000s', '2010s')))))
+
+us_df_mod$decade <- factor(us_df_mod$decade, levels=c("70s", "80s", "90s", "2000s", "2010s"))
+  
+top10_groups <- us_df_mod %>%
+    filter(gname != "Unknown") %>%
+    group_by(gname) %>%
+    summarise(nr_of_attacks = n()) %>%
+    arrange(desc(nr_of_attacks)) %>%
+    head(n=10)
+  
+top10_groups_activity <- us_df_mod %>%
+  filter(us_df_mod$gname %in% top10_groups$gname )%>%  
+  select(decade, group_name = gname)%>%
+  group_by(decade, group_name) %>%
+  summarise(nr_of_attacks = n(), .groups = 'drop_last')%>%
+  arrange(desc(nr_of_attacks))%>%
+  top_n(n=10, wt=nr_of_attacks)
+
+ggplot(data=top10_groups_activity, aes(x=decade, y=nr_of_attacks, col=group_name, group= group_name)) +
+  geom_line(size=1.5, alpha=1) + 
+  theme(legend.position="right")+
+  labs(title='Terrorist Group activity over decades', x= 'Decades', y ='Number of Attacks') +
+  scale_color_brewer(name = "Terrorist Groups", palette = 'RdGy') + theme_wsj()
+
+
+
+
+
+```
+
+## Conclusion
+
+FALN separatist organization in Puerto Rico which used violence in its campaign for Puerto Rican independence from the United States contributes to the highest attacks in 70s and then after rapidly declines reducing to 0 attacks after the 90s. Also, between 1973, when the Supreme Court decided abortion should be legal throughout the United States, the US has been the target of anti abortion extremists attacks facing more than 300 acts of extreme violence. The third group attacking the United States for more than four decades is the Animal Liberation Front (ALF).
+
+
+## 3.4 What were the weapons of choice over the decades ?
+
+
+```{r section 3.4, echo=FALSE, warning=FALSE, fig.height = 8, fig.width = 15}
+
+
+top15_weapons <- us_df_mod %>%
+  select(year = iyear, weapon_type = weaptype1_txt, decade) %>%
+  filter(weapon_type != "Unknown") %>% 
+  group_by(decade, weapon_type) %>%
+  summarise(nr_of_attacks = n(), .groups = 'drop_last') %>%
+  top_n(n=5, wt=nr_of_attacks) %>%
+  mutate(percent = nr_of_attacks/sum(nr_of_attacks)*100) %>%
+  arrange(decade, desc(nr_of_attacks))
+
+
+
+ggplot(data=top15_weapons, aes(x=decade, y=percent, col=weapon_type, group= weapon_type)) +
+  geom_line(size=1.5, alpha=0.9) +
+  labs(title='Weapon choice of terrorists over time', x= 'Decades', y='Percentage of Use') +
+  scale_color_brewer(name = "Weapon Types", palette = 'YlOrRd') + theme_wsj()
+
+
+
+
+```
+
+## Conclusion
+
+We can observe that the use of explosives have been in a decline since the 70s but in contrast the use of incendiary saw an increase from the 70s to 2000s and then decline there after. But, we should be more concerned as the use of biological and chemical weapons have been in rise from early 80s and 70s respectively which would prove more lethal than explosives or incendiary weapons. 
+
+
+## 3.5 Which locations were targeted in united states ?
+
+```{r section 3.5, echo=FALSE, warning=FALSE, fig.height = 8, fig.width = 10}
+
+library(leaflet)
+
+map_us <- us_df_mod %>% 
+  filter(nkill > 0)
+
+leaflet(data = map_us) %>%
+  addTiles() %>%
+  addMarkers(lat=map_us$latitude, lng=map_us$longitude, clusterOptions = markerClusterOptions(),
+             popup= paste(
+               "<br><strong>Killed: </strong>", map_us$nkill
+             ))
+
+
+
+
+```
+
+
+## Conclusion
+
+USA doesn't witness many terror attacks as compared to India.There are very few attacks that have claimed a very large number of lives. Also the number of causalities on an average is less as compared to that of India.
+It has however witnessed one of the worst terrorist attacks in 2001 in New-York, which killed more than 1500 people.
+
+
+## 3.6 What should have our concerns Gun violence or Terror attacks ?
+
+```{r section 3.6, echo=FALSE, warning=FALSE, fig.height = 8, fig.width = 15}
+
+
+gun_df <- read.csv("gun-violence-data_01-2013_03-2018.csv")
+
+gun_df_cleaned <- gun_df %>% 
+  select(date, state,n_killed,n_injured)
+
+gun_df_cleaned$date <- ymd(gun_df_cleaned$date)
+gun_df_cleaned$date <- year(gun_df_cleaned$date)
+
+gun_df_cleaned <- gun_df_cleaned %>% 
+  group_by(date,state) %>% 
+  summarise(sum_kill = sum(n_killed), sum_injured = sum(n_injured), .groups = 'drop_last' ) %>% 
+  drop_na()
+
+us_terror_grouped <- us_df_mod %>% 
+  select(date = iyear, state = provstate, nkill, nwound ) %>% 
+  group_by(date, state) %>% 
+  summarise(sum_terror_kill = sum(nkill), sum_terror_injured = sum(nwound), .groups = 'drop_last') %>% 
+  drop_na()
+
+df_terror_gun <- inner_join(gun_df_cleaned,us_terror_grouped, by=c('date','state'))
+
+df_terror_gun %>%
+  select(-state) %>% 
+  group_by(date) %>% 
+  summarise(Gun_Killed = sum(sum_kill), Gun_injured = sum(sum_injured), Attack_kill = sum(sum_terror_kill), Attack_injured = sum(sum_terror_injured)) %>% 
+  drop_na() %>% 
+  pivot_longer(., cols = 2:5, names_to ="violence_type",  
+               values_to = "Count") %>% 
+  ggplot(., aes(fill=violence_type, y=Count, x=date)) + 
+  geom_bar(position="dodge", stat="identity", alpha = 0.7)+
+  scale_fill_brewer(palette="OrRd",
+                    name="Violence\nType and Result", 
+                    breaks=c("Attack_injured", "Attack_kill", "Gun_injured","Gun_Killed"),
+                    labels=c("Terror Attack Injured", "Terror Attack Killed", "Gun Violence Injured","Gun Violence Killed")) +
+  xlab('Years') + ylab('Number of affected people') + labs(title = 'Comparison of Violence type from Year 2013-2017') + theme_wsj()
+
+
+
+
+```
+
+## Conclusion
+
+Gun violence in the US results in tens of thousands of deaths and injuries annually. In 2013, there were 73,505 nonfatal firearm injuries which included 11,208 homicides, 21,175 suicides, 505 deaths due to accidental or negligent discharge of a firearm, and 281 deaths due to firearms use with "undetermined intent". 
+From the above graph, we can observe that the number of gun violence incidents are increasing every year. In the year 2014, there were about 51 thousand incidents reported. The number increased to 53 thousand in the next year, 2016 saw a bigger jump with close to 58 thousand incidents reported, in 2017. The number of gun violence incidents further increased to 61 thousand. A big increase of 10,000 incidents have been observed from 2014 to 2017, and this number is expected to further grow.
+In the purview of the statistics shown by the grouped bar charts it is vividly clear that gun violence is the biggest issue in United States in comparison to terrorism.
+
+
+## 3.7 What should have our concerns Gun violence or Terror attacks ?
+
+```{r section 3.7, echo=FALSE, warning=FALSE, fig.height = 8, fig.width = 15}
+
+df_terror_gun %>%
+  select(-date) %>% 
+  group_by(state) %>% 
+  summarise(Gun_Killed = sum(sum_kill), Gun_injured = sum(sum_injured), Attack_kill = sum(sum_terror_kill), Attack_injured = sum(sum_terror_injured)) %>% 
+  drop_na() %>%
+  arrange(desc(Attack_kill)) %>% 
+  slice(1:10) %>% 
+  pivot_longer(., cols = 2:5, names_to ="violence_type",  
+               values_to = "Count") %>% 
+  ggplot(.,aes(x=state,y=Count,fill=violence_type))+
+  geom_bar(stat="identity", alpha = 0.7)+
+  coord_polar()+
+  scale_fill_brewer(palette="OrRd", 
+                    name="Violence\nType and Result", 
+                    breaks=c("Attack_injured", "Attack_kill", "Gun_injured","Gun_Killed"),
+                    labels=c("Terror Attack Injured", "Terror Attack Killed", "Gun Violence Injured","Gun Violence Killed"))+
+  xlab("")+
+  ylab("") + labs(title = 'Comparison of cities with respective to violence type') + theme_wsj()
+
+
+
+```
+
+## Conclusion
+
+The following rose chart displays the comparison of violence type and its affects distributed among different cities of United States where California tops with approx 16000 incidents reported. Florida with 15,000 incidents and Texas with 13,000 and it narrates the same story that gun violence is the greater evil than overall terrorism in United States.
+
+# Section 4
+
+#### In this section we will make use of happiness index dataset and income by country dataset for the year 2015, 2016 and 2017 to draw out correlations relating to various factors and number of terrorist attacks
+
+## 4.1 Does GDP of a nation gets affected by the terrorist activities ?
+
+```{r section 4.1, echo=FALSE, warning=FALSE, fig.height = 8, fig.width = 15}
+
+r_year <- 1970:2017
+
+gdp <- read.csv("gdp_1960_2020.csv", na.strings = "") %>%
+filter(year %in% r_year ) %>%
+mutate(country_txt = str_replace(country, "the United States", "United States")) %>%
+dplyr::select(year, country_txt, gdp)
+
+
+
+
+
+terror_sub <- gtd_df %>%
+dplyr::select(iyear,country_txt, eventid, success) %>%
+group_by (iyear, country_txt) %>%
+
+summarise(Total_Attacks = n(), .groups = 'drop_last')
+
+
+
+names(gdp)[names(gdp) == "year"] <- 'iyear'
+
+
+
+terror_gdp <- inner_join(terror_sub, gdp, by = c("iyear", "country_txt"))
+
+
+
+terror_gdp_1 <- terror_gdp %>%
+dplyr::select(iyear, country_txt, Total_Attacks, gdp) %>%
+filter(country_txt %in% c("United States","Japan","China"," Germany"," France",
+"United Kingdom","Italy","Brazil","Canada","India",
+"Australia","Spain","Netherlands","Sweden"," Mexico"
+
+))
+
+
+
+
+
+##feature scaling
+
+
+
+terror_gdp_1[,3:4] <- scale(terror_gdp_1[,3:4])
+
+
+
+## scatter plot
+
+
+
+scale_units <- function(n) {
+labs <- ifelse(n < 1000, n, # less than thousands
+ifelse(n < 1e6, paste0(round(n/1e3), 'k'), # in thousands
+ifelse(n < 1e9, paste0(round(n/1e6), 'M'), # in millions
+ifelse(n < 1e12, paste0(round(n/1e9), 'B'), # in billions
+ifelse(n < 1e15, paste0(round(n/1e12), 'T'), # in trillions
+'too big!'
+)))))
+return(labs)
+}
+
+
+
+terror_gdp_sc <- ggplot(terror_gdp_1, aes(x=gdp, y=Total_Attacks))+
+geom_point(aes(col= country_txt))+
+geom_smooth(formula = y~x, method = "lm", col = "firebrick", se= FALSE)+
+scale_x_continuous(labels = scale_units)+
+labs(col = "Countries",
+title = "GDP vs Total Attacks",
+y = "Total Attacks",
+x = "GDP in Trillions")+
+theme_base()+
+#theme(panel.background = element_rect(fill = "#fd9984",
+# colour = "#fd9984"))+
+
+theme(plot.title = element_text(size = 14,
+face = "bold",
+colour = "black",
+lineheight = 1.2,
+hjust = 0.5),
+axis.title.x = element_text(size = 12),
+axis.title.y = element_text(size = 12),
+axis.text.x = element_text(size = 12),
+axis.text.y = element_text(size = 12),
+legend.title = element_text(size = 12,
+face = "bold",
+colour = "black")) + theme_wsj()
+
+
+
+plot(terror_gdp_sc)
+
+
+
+
+
+
+
+
+
+```
+
+## Conclusion
+
+In the above scatter plot, we tried to get a generally idea on how GDP of a country gets affected by terrorist attacks. For this purpose, we chose few developed and developing countries for our analysis. As it is clearly visible from the graph that there exists a negative correlation between total attacks and GDP of a country. As number of attacks increase, the GDP decreases. There could be several other factors for the fall in GDP, number of terrorist attacks is one of them.
+
+
+
+## 4.2 Does the mean income index, happiness score, health life expectancy, etc., of a nation have any relation with the number of terrorists attacks ?
+
+
+```{r section 4.2, echo=FALSE, warning=FALSE, fig.height = 8, fig.width = 10}
+
+
+h_2015 <- read.csv("2015.csv", na.strings = "") %>%
+dplyr::select(Country, Happiness.Rank, Happiness.Score,
+Economy..GDP.per.Capita., Family,
+Health..Life.Expectancy., Freedom,
+Trust..Government.Corruption.,
+Generosity,
+Dystopia.Residual)
+h_2016 <- read.csv("2016.csv", na.strings = "") %>%
+dplyr::select(Country, Happiness.Rank, Happiness.Score,
+Economy..GDP.per.Capita., Family,
+Health..Life.Expectancy., Freedom,
+Trust..Government.Corruption.,
+Generosity,
+Dystopia.Residual)
+
+h_2017 <- read.csv("2017.csv", na.strings = "") %>%
+dplyr::select(Country, Happiness.Rank, Happiness.Score,
+Economy..GDP.per.Capita., Family,
+Health..Life.Expectancy., Freedom,
+Trust..Government.Corruption.,
+Generosity,
+Dystopia.Residual)
+
+
+
+master_happy <- rbind(h_2015, h_2016, h_2017)
+
+
+
+means_all <- master_happy %>%
+group_by(Country) %>%
+summarise(Happiness_Rank = mean(Happiness.Rank),
+Happiness_Score = mean(Happiness.Score),
+Economy_GDP = mean(Economy..GDP.per.Capita.),
+Family = mean(Family),
+Health_Life_Exp = mean(Health..Life.Expectancy.),
+Freedom = mean(Freedom),
+Trust_Government_Corruption = mean(Trust..Government.Corruption.),
+Generosity = mean(Generosity),
+Dystopia_Residual = mean(Dystopia.Residual))
+
+
+
+names(means_all)[names(means_all) == "Country"] <- "country_txt"
+
+
+
+terror_subset <- gtd_df %>%
+dplyr::select(eventid, country_txt) %>%
+group_by(country_txt) %>%
+summarise(Total_Attacks = n())
+
+
+
+terror_happy <- inner_join(means_all, terror_subset, by = "country_txt")
+
+
+
+terror_happy[,2:11] <- scale(terror_happy[,2:11])
+
+
+income <- read_excel("Income by Country.xlsx", sheet = "Income Index") %>%
+dplyr::select(1,27:29) %>%
+mutate(Country = str_replace(Country, "Russian Federation", "Russia")) %>%
+pivot_longer(cols = 2:4, names_to ="iyear",
+values_to = "income_index") %>%
+drop_na() %>%
+
+group_by(Country) %>%
+summarise(Mean_IncomeIndex = mean(income_index, na.rm =T))
+
+
+
+
+names(income)[names(income) == "Country"] <- "country_txt"
+
+
+
+
+income_subset <- inner_join(income, terror_happy, by = "country_txt" )
+
+
+
+income_subset[,2:12] <- scale(income_subset[,2:12])
+
+
+
+##Corrplot
+
+
+
+cormat_2 <- cor(income_subset[,-1])
+
+
+
+cor_inc_attacks <- corrplot(cormat_2, method = "color", COL1(sequential= c('OrRd')),
+type = 'lower', order = 'original', addCoef.col = 'black', tl.col = 'black')
+
+
+
+
+
+mtext("Correlation Plot of All Countries", at=2.5, line=0.2, cex=2)
+
+
+
+```
+
+## Conclusion
+
+In the above correlation plot, we tried to find the correlation between terrorism and various factors that contribute in calculating the happiness score of a country. We did not get any robust results in this plot except for the negative correlations between terrorism and family & terrorism and freedom. We thought that the data could be acting in a biased manner as whole, so, we decided to dive deep into the data and work on small and distinct sets of data which will help us to understand a general picture.
+
+## 4.3 Does the mean income index, happiness score, health life expectancy, etc., of a nation have any relation with the number of terrorists attacks for Developing and Developed countries ?
+
+```{r section 4.3, echo=FALSE, warning=FALSE, fig.height = 8, fig.width = 10}
+
+developing <- income_subset %>%
+filter(country_txt %in% c("Afghanistan","Albania", "Algeria", 'American Samoa','Angola','Antigua and Barbuda',"Argentina",
+"Armenia","Azerbaijan","Bangladesh","Belarus","Belize","Benin", "Bhutan","Bolivia","Botswana",
+"Brazil","Bulgaria","Burkina Faso","Burundi","Cambodia","Cameroon","Cape Verde",
+"Central African Republic","Chad","Chile","China","Colombia", "Comoros","Costa Rica","Cuba",
+"Djibouti","Dominica","Dominican Republic","Ecuador","El Salvador","Eritrea",
+"Ethiopia","Fiji","Gabon","Gambia", "Georgia","Ghana","Grenada","Guatemala","Guinea",
+"Guinea-Bisau", "Guyana","Haiti","Honduras", "India","Indonesia","Iran","Iraq","Jamaica","Jordan",
+"Kazakhstan","Kenya","Kiribati", "Korea","Kosovo","Kyrgyz Republic","Lao PDR","Latvia","Lebanon",
+"Lesotho","Liberia","Libya","Lithuania","Macedonia","Madagascar","Malawi","Malaysia","Maldives",
+"Mali","Marshall Islands","Mauritania","Mauritius","Mayotte", "Mexico","Micronesia","Moldova",
+"Mongolia","Montenegro","Morocco","Mozambique","Myanmar","Namibia","Nepal","Nicaragua",
+"Niger","Nigeria","Pakistan","Palau","Panama", "Papua New Guinea","Paraguay","Peru",
+"Philippines","Romania","Russia","Rwanda","Samoa","Senegal","Serbia","Seychelles",
+"Sierra Leone","Solomon Islands","Somalia", "South Africa","Sri Lanka","Sudan","Suriname",
+"Swaziland","Syria","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo",
+"Tonga","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","Uruguay",
+"Uzbekistan","Vanuatu","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe")
+)
+
+cormat_developing <- cor(developing[,-1])
+
+cor_developing <- corrplot(cormat_developing, method = "color", COL1(sequential= c('OrRd')), type = "lower",
+order = 'original', addCoef.col = 'black',
+tl.col = 'black'
+)
+mtext("Correlation Plot of Developing Countries", at=2.5, line=0.2, cex=2)
+
+
+
+developed <- income_subset %>%
+filter(country_txt %in% c("Luxembourg","Singapore","Ireland","Qatar","Bermuda","Cayman Islands","Switzerland",
+"United Arab Emirates","Brunei Darussalam","United States","San Marino","Norway",
+"Denmark","Netherlands","Iceland","Austria","Sweden","Germany","Australia",
+"Belgium","Kuwait","Finland","Canada"))
+
+
+
+cormat_developed <- cor(developed[,-1])
+
+
+
+cor_developed <- corrplot(cormat_developed, method = "color", COL1(sequential= c('OrRd')), type = "lower",
+order = 'original', addCoef.col = 'black', tl.col = 'black')
+mtext("Correlation Plot of Developed Countries", at=2.5, line=0.2, cex=2)
+
+
+
+
+
+```
+
+## Conclusion
+
+1. Similar to the above plot, we can see that there is a negative correlation between terrorism and family, terrorism and freedom. Hence we conclude that as freedom increases, number of terrorist attacks decrease and as terrorists events grow, family (have someone to count on in times of trouble) diminishes.
+
+2. For developed countries, we get more number of correlations with terrorist attacks as compared to developing countries it can be observed that there is a strong negative correlation between freedom and terrorism & terrorism and government's free from corruptions, which makes sense as more the government is trusted and free of corruptions, less terrorist attacks takes place. Additionally, we can see that health life expectancy also dwindles when terrorist attacks escalate. The next correlation states that people tend to donate more where the number of terrorist attacks are more.
+
+## 4.4 Does the mean income index, happiness score, health life expectancy, etc., of a nation have any relation with the number of terrorists attacks as per the geographical location of the countries ?
+
+```{r section 4.5, echo=FALSE, warning=FALSE, fig.height = 8, fig.width = 10}
+
+##------region wise---------------------------------
+
+
+
+## Africa--------
+
+
+
+africa_regions <- income_subset %>%
+filter(country_txt %in% c("Angola","Burkina Faso","Burundi","Benin","Botswana","Congo, The Democratic Republic of the",
+"Central African Republic","Congo","Côte D'Ivoire","Cameroon","Cape Verde","Western Sahara",
+"Eritrea","Ethiopia","Gabon","Ghana","Gambia" ,"Guinea","Equatorial Guinea",
+"Guinea-Bissau","Kenya" ,"Liberia","Lesotho" ,"Madagascar" ,"Mali","Mauritius",
+"Malawi","Mozambique","Namibia","Niger","Nigeria","Rwanda","Seychelles","South Sudan","Saint Helena",
+"Sierra Leone","Senegal","Sao Tome and Principe","Swaziland","Chad","Togo","Tanzania","Uganda","Mayotte",
+"South Africa","Zambia","Zimbabwe"))
+
+
+
+cormat_africa <- cor(africa_regions[,-1])
+
+
+
+cor_africa <- corrplot(cormat_africa, method = "color", COL1(sequential= c('OrRd')), type = "lower",
+order = 'original', addCoef.col = 'black', tl.col = 'black')
+mtext("Correlation Plot of Countries in African Region", at=2.5, line=0.2, cex=2)
+
+## Arab---------------------------------
+
+arab_regions <- income_subset %>%
+filter(country_txt %in% c("Bahrain","Djibouti", "Algeria","Comoros","Morocco","Mauritania","Palestinian Territory",
+"Sudan","Somalia","Tunisia"
+))
+
+cormat_arab <- cor(arab_regions[,-1])
+
+cor_arab <- corrplot(cormat_arab, method = "color", COL1(sequential= c('OrRd')), type = "lower",
+order = 'original', addCoef.col = 'black', tl.col = 'black')
+mtext("Correlation Plot of Countries in Arab Region", at=2.5, line=0.2, cex=2)
+
+
+
+
+## Asia/Pacific--------------------------------------
+
+asia_regions <- income_subset %>%
+filter(country_txt %in% c("Afghanistan", "Antarctica", "American Samoa","Australia","Azerbaijan",
+"Bangladesh","Brunei Darussalam","Bhutan","Cocos (Keeling) Islands",
+"Cook Islands", "China", "Christmas Island", "Fiji", "Micronesia, Federated States of",
+"Guam", "Hong Kong", "Heard Island and McDonald Islands", "Indonesia", "India",
+"British Indian Ocean Territory", "Japan", "Kyrgyzstan", "Cambodia","Kiribati","Korea, Democratic People's Republic of",
+"Korea","Kazakhstan", "Lao People's Democratic Republic", "Sri Lanka","Marshall Islands","Myanmar",
+"Mongolia", "Macau","Northern Mariana Islands","Maldives","Malaysia","New Caledonia", "Norfolk Island",
+"Nepal","Nauru","Niue","New Zealand", "French Polynesia","Papua New Guinea","Philippines","Pakistan",
+"Pitcairn Islands", "Palau","Reunion", "Solomon Islands","Singapore", "Syrian Arab Republic",
+"French Southern Territories","Thailand","Tajikistan", "Tokelau","Turkmenistan","Tonga","Timor-Leste",
+"Tuvalu","Taiwan","United States Minor Outlying Islands", "Uzbekistan","Vietnam","Vanuatu",
+"Wallis and Futuna","Samoa"
+))
+
+cormat_asia <- cor(asia_regions[,-1])
+
+cor_asia <- corrplot(cormat_asia, method = "color", COL1(sequential= c('OrRd')), type = "lower",
+order = 'original', addCoef.col = 'black', tl.col = 'black')
+mtext("Correlation Plot of Countries in Asia Region", at=2.5, line=0.2, cex=2)
+
+
+europe_regions <- income_subset %>%
+filter(country_txt %in% c("Andorra","Albania","Armenia","Austria","Bosnia and Herzegovina","Belgium",
+"Bulgaria","Belarus","Switzerland","Cyprus","Czech Republic","Germany",
+"Denmark","Estonia","Spain","Finland","Faroe Islands","France","France, Metropolitan",
+"United Kingdom","Georgia", "Gibraltar","Greenland","Greece","Croatia","Hungary","Ireland",
+"Israel", "Iceland","Italy", "Liechtenstein","Lithuania","Luxembourg","Latvia","Monaco","Moldova, Republic of",
+"Macedonia","Malta","Netherlands","Norway","Poland","Portugal","Romania",
+"Russia","Sweden","Slovenia","Svalbard and Jan Mayen","Slovakia","San Marino","Turkey",
+"Ukraine","Holy See (Vatican City State)","Serbia","Montenegro","Aland Islands",
+"Guernsey","Isle of Man","Jersey"
+))
+
+
+
+cormat_europe <- cor(europe_regions[,-1])
+
+
+
+cor_europe <- corrplot(cormat_europe, method = "color", COL1(sequential= c('OrRd')), type = "lower",
+order = 'original', addCoef.col = 'black', tl.col = 'black')
+
+
+
+mtext("Correlation Plot of Countries in European Region", at=2.5, line=0.2, cex=2)
+
+
+
+
+
+
+## Middle east---------------------------------------------
+
+
+
+middleast_regions <- income_subset %>%
+filter(country_txt %in% c("United Arab Emirates","Egypt","Iraq","Iran","Jordan","Kuwait",
+"Lebanon","Libya","Oman","Qatar","Saudi Arabia","Yemen" ))
+
+
+
+cormat_middleast <- cor(middleast_regions[,-1])
+
+
+
+cor_middleast <- corrplot(cormat_middleast, method = "color",COL1(sequential= c('OrRd')), type = "lower",
+order = 'original', addCoef.col = 'black', tl.col = 'black')
+mtext("Correlation Plot of Countries in MiddleEast Region", at=2.5, line=0.2, cex=2)
+
+
+south_north_america_regions <- income_subset %>%
+filter(country_txt %in% c("Canada","Saint Pierre and Miquelon","United States", "Anguilla","Netherlands","Argentina",
+"Aruba", "Barbados","Bermuda","Bolivia","Brazil", "Bahamas","Bouvet Island","Belize",
+"Chile","Colombia","Costa Rica", "Cuba","Dominica","Dominican Republic","Ecuador",
+"Falkland Islands (Malvinas)", "Grenada","French Guiana", "Guadeloupe",
+"South Georgia and the South Sandwich Islands","Guatemala","Guyana","Honduras","Haiti",
+"Jamaica","Saint Kitts and Nevis","Cayman Islands","Saint Lucia","Martinique","Montserrat",
+"Mexico","Nicaragua","Panama","Peru", "Puerto Rico","Paraguay","Suriname","El Salvador",
+"Turks and Caicos Islands","Trinidad and Tobago","Uruguay","Saint Vincent and the Grenadines",
+"Venezuela","Virgin Islands, British","Virgin Islands, U.S.","Saint Barthelemy","Saint Martin"))
+
+
+
+
+cormat_south_north_america <- cor(south_north_america_regions[,-1])
+
+
+
+cor_south_north_america <- corrplot(cormat_south_north_america, method = "color", COL1(sequential= c('OrRd')), type = "lower",
+order = 'original', addCoef.col = 'black', tl.col = 'black')
+mtext("Correlation Plot of Countries in Northern/Southern American Region", at=2.5, line=0.2, cex=1.5)
+
+
+
+
+
+
+
+
+
+```
+
+
+## Conclusion
+
+In the case of African region, we found an interesting but implausible relation which states that people are more happy where number of terrorist activities are more and also family and terrorism are inversely related, which should not be the case.
+
+In the case of Arab region, we can see the same relationships as established in the African correlation plot only its more stronger as compared to the previous correlation. 
+
+In the countries belonging to Asian region, the chart contradicts to what we established in the previous two plots. Here there is a very strong negative correlation between terrorism and happiness score, family and freedom, which is convincing because people are unhappy where terrorist attacks are more.
+
+In the European region, no robust correlation can be inferred.Thus we can say that terrorist attacks in European region are not particularly influenced or related to any of the countries indicators.
+
+Same as in the case of nations in the Asian region,we see similar type of correlation between terrorism and happiness score, family and freedom in the Middle east region.
+
+In countries belonging to Northern/Southern American region, we can notice that, there is a negative correlation between terrorism and generosity.
+
+
+# Key Takeaways
+
+1. In 1970 United States of America was the worst affected nation. Around 1976 1977 and 1978, terrorists activities were seen in countries belonging to European, Asian and Sub Sahara African regions and also in the Soviet Union and this can be considered as the time when terrorism started spreading in the world. It can be observed that almost every country in the world had faced terrorism by the year 1992. 2014 was the year which has recorded most number of terrorist attacks. This is due to the allegiance of two terrorist groups Boko Haram and ISIL, They were were jointly responsible for 51% of all claimed global fatalities in 2014. Iraq continues to be the country most impacted by terrorism. ISIL is responsible for all the terrorists attacks in Iraq Most of the attacks include bombing and explosion.
+2. In Indian subcontinent we can observe that the state of Kashmir and city Srinagar have been the worst targeted facing nearly all the terror attack types these attacks in the northern region of country mainly come from only Jaish-e-Mohammad(JeM), Separatists, Hizbul Mujahideen(HM), LeT and Muslim extremists terror groups. we also noted that bombing accounts for almost 50% of the attacks. The second method that was preferred was armed assault which constitutes 25%. Overall we can say that Naxalite–Maoist group name looks the most prominent and the most dangerous terrorist group in India with having attacked more than 1400 times.
+3.USA doesn't witness many terror attacks as compared to India.There are very few attacks that have claimed a very large number of lives. Terror Attacks on United States are in decline since the highest spike in 1970s. Bombing/Explosion has been the most used attack type over the years with a high of 278 explosions in 1970. which targeted everything with few target categories like Military, Police, Telecommunication, Other and NGO's being targeted the most. FALN separatist organization in Puerto Rico contributes to the highest attacks in 70s also Between 1973, when the Supreme Court decided abortion should be legal throughout the United States, The US have been the target of anti abortion extremists attacks facing more than 300 acts of extreme violence.
+Gun violence in the US results in tens of thousands of deaths and injuries annually. In 2013, there were 73,505 nonfatal firearm injuries which included 11,208 homicides, 21,175 suicides, 505 deaths due to accidental or negligent discharge of a firearm, and 281 deaths due to firearms use with "undetermined intent".In the purview of the statistics shown by charts it is vividly clear that gun violence is the biggest issue in United States in comparison to terrorism.
+4. Finally we found some factors correlating with the number of terrorist attacks when we divided the countries as per their geographical regions like In the case of African region, we found an interesting but implausible relation which states that people are more happy where number of terrorist activities are more and also family and terrorism are inversely related, which should not be the case. In Arab region, we can see the same relationships as established in the African nations only its more stronger. In the countries belonging to Asian region, the chart contradicts to what we established in the previous two regions. Here there is a very strong negative correlation between terrorism and happiness score, family and freedom, which is convincing because people are unhappy where terrorist attacks are more. In the European region, no robust correlation can be inferred. Thus we can say that terrorist attacks in European region are not particularly influenced or related to any of the countries indicators. Countries belonging to Northern/Southern American region, we found out that, there is a negative correlation between terrorism and generosity.
+
+# References 
+
+1. https://www.kaggle.com/holoong9291/gdp-of-all-countries19602020
+2. https://www.kaggle.com/frankmollard/income-by-country
+3. https://www.kaggle.com/mathurinache/world-happiness-report
+4. https://www.r-graph-gallery.com/
+5. https://start.umd.edu/gtd/downloads/Codebook.pdf
